@@ -1,7 +1,7 @@
 package com.microservice.flowManager.controller;
 
 import com.microservice.flowManager.dto.FileStatusResponse;
-import com.microservice.flowManager.entity.FileRecord;
+import com.microservice.flowManager.dto.UploadResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.InputStreamResource;
@@ -17,7 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 import com.microservice.flowManager.service.FileService;
 
 import java.io.InputStream;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/files")
@@ -28,41 +27,20 @@ public class FileController {
     private final FileService fileService;
 
     @PostMapping("/upload")
-    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
-        try {
-            FileRecord record = fileService.uploadFile(file);
-            return ResponseEntity.ok(Map.of(
-                    "fileId", record.getId(),
-                    "status", record.getStatus(),
-                    "message", "File uploaded and processing started"
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
-        }
+    public ResponseEntity<UploadResponse> uploadFile(@RequestParam("file") MultipartFile file) throws Exception {
+        return ResponseEntity.ok(fileService.uploadFile(file));
     }
 
     @GetMapping("/{id}/status")
     public ResponseEntity<FileStatusResponse> getStatus(@PathVariable Long id) {
-        FileRecord record = fileService.getStatus(id);
-
-        return ResponseEntity.ok(FileStatusResponse.builder()
-                .fileId(record.getId())
-                .status(record.getStatus())
-                .originalPath(record.getOriginalPath())
-                .convertedPath(record.getConvertedPath())
-                .message("Current file status")
-                .build());
+        return ResponseEntity.ok(fileService.getStatus(id));
     }
 
     @GetMapping("/{id}/download")
-    public ResponseEntity<InputStreamResource> downloadFile(@PathVariable Long id) {
-        try {
-            InputStream stream = fileService.getConvertedFile(id);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .body(new InputStreamResource(stream));
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<InputStreamResource> downloadFile(@PathVariable Long id) throws Exception {
+        InputStream stream = fileService.getConvertedFile(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(new InputStreamResource(stream));
     }
 }
