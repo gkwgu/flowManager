@@ -13,6 +13,7 @@ import com.microservice.flowManager.mapper.FileRecordMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,6 +22,7 @@ import com.microservice.flowManager.client.SubscriptionClient;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -33,16 +35,17 @@ public class FileService {
     private final FileRecordMapper fileRecordMapper;
     private final SubscriptionClient subscriptionClient;
 
+    private final RedisTemplate<String, SubscriptionResponse> redisTemplate;
+    private static final String CACHE_PREFIX = "subscription:";
+    private static final long CACHE_TTL = 60;
+
     @Value("${minio.bucket}")
     private String bucket;
 
     private static final long MAX_FREE_SIZE = 100L * 1024 * 1024; // 100 MB
 
-    @Transactional
     public UploadResponse uploadFile(MultipartFile file, String userLogin) throws Exception {
-
-        SubscriptionResponse subscription = subscriptionClient.getSubscription(userLogin);
-
+        SubscriptionResponse subscription = getSubscriptionCached(userLogin);
         boolean isPaid = "PAID".equals(subscription.getType()) && subscription.isActive();
 
         if (!isPaid && file.getSize() > MAX_FREE_SIZE) {
@@ -53,7 +56,11 @@ public class FileService {
         }
 
         String path = minioService.uploadFile(file);
+        return saveAndSendEvent(path, file);
+    }
 
+    @Transactional
+    public UploadResponse saveAndSendEvent(String path, MultipartFile file) throws Exception {
         FileRecord record = FileRecord.builder()
                 .originalPath(path)
                 .status(FileRecord.FileStatus.PROCESSING)
@@ -67,6 +74,18 @@ public class FileService {
         return fileRecordMapper.toUploadResponse(record);
     }
 
+
+    private SubscriptionResponse getSubscriptionCached(String userLogin) {
+        String cacheKey = CACHE_PREFIX + userLogin;
+        SubscriptionResponse cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            log.info("Cache hit for {}", userLogin);
+            return cached;
+        }
+        SubscriptionResponse response = subscriptionClient.getSubscription(userLogin);
+        redisTemplate.opsForValue().set(cacheKey, response, CACHE_TTL, TimeUnit.MINUTES);
+        return response;
+    }
     public FileStatusResponse getStatus(Long id) {
         FileRecord record = fileRecordRepository.findById(id)
                 .orElseThrow(() -> new FileRecordNotFoundException(id));
