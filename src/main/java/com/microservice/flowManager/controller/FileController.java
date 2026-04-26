@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,8 +28,10 @@ public class FileController {
     private final FileService fileService;
 
     @PostMapping("/upload")
-    public ResponseEntity<UploadResponse> uploadFile(@RequestParam("file") MultipartFile file) throws Exception {
-        return ResponseEntity.ok(fileService.uploadFile(file));
+    public UploadResponse uploadFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestHeader("X-User-Login") String userLogin) throws Exception {
+        return fileService.uploadFile(file, userLogin);
     }
 
     @GetMapping("/{id}/status")

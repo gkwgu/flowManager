@@ -31,4 +31,10 @@ public class GlobalExceptionHandler {
                 "error", e.getMessage()
         ));
     }
+    @ExceptionHandler(FileSizeLimitException.class)
+    public ResponseEntity<?> handleFileSizeLimit(FileSizeLimitException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of(
+                "error", e.getMessage()
+        ));
+    }
 }
